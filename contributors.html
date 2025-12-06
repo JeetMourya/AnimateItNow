@@ -811,10 +811,12 @@
 
       // GitHub API headers with hardcoded token
       function getApiHeaders() {
+        const token = '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';
         return {
           'Accept': 'application/vnd.github.v3+json',
           'User-Agent': 'AnimateItNow-Contributors',
-          'Authorization': 'token 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'
+          // Classic tokens use 'token' prefix
+          'Authorization': `token ${token}`
         };
       }
 
@@ -833,6 +835,11 @@
             const remaining = response.headers.get('X-RateLimit-Remaining');
             const resetTime = response.headers.get('X-RateLimit-Reset');
             
+            if (response.status === 401) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(`GitHub API authentication failed (401). Token may be invalid or expired. ${errorData.message || 'Please check your token.'}`);
+            }
+            
             if (response.status === 403) {
               if (resetTime) {
                 const resetDate = new Date(parseInt(resetTime) * 1000);
@@ -842,7 +849,8 @@
             }
 
             if (!response.ok) {
-              throw new Error(`GitHub API error! Status: ${response.status}`);
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(`GitHub API error! Status: ${response.status}. ${errorData.message || ''}`);
             }
 
             const contributors = await response.json();
