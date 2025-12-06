@@ -1,0 +1,6 @@
+# GitHub token config (generated during deployment, not committed)
+config.js
+
+# Local development config
+config.local.js
+
