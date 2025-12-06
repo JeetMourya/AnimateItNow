@@ -2030,14 +2030,43 @@
     let filteredData = null;
 
     // GitHub API headers with hardcoded token
+    const GITHUB_TOKEN = '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';
+    
     function getApiHeaders() {
-        const token = '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';
         return {
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'AnimateItNow-Leaderboard',
             // Classic tokens use 'token' prefix
-            'Authorization': `token ${token}`
+            'Authorization': `token ${GITHUB_TOKEN}`
         };
+    }
+    
+    // Validate token by making a test request
+    async function validateToken() {
+        try {
+            const response = await fetch('https://api.github.com/user', {
+                method: 'GET',
+                headers: getApiHeaders(),
+                mode: 'cors'
+            });
+            
+            if (response.status === 401) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Token validation failed:', errorData);
+                return { valid: false, error: errorData.message || 'Bad credentials' };
+            }
+            
+            if (response.ok) {
+                const userData = await response.json().catch(() => ({}));
+                console.log('✅ Token validated successfully. Authenticated as:', userData.login || 'Unknown');
+                return { valid: true, user: userData.login };
+            }
+            
+            return { valid: false, error: `Unexpected status: ${response.status}` };
+        } catch (error) {
+            console.error('Token validation error:', error);
+            return { valid: false, error: error.message };
+        }
     }
 
     // --- UTILITY FUNCTIONS ---
@@ -2060,7 +2089,18 @@
         while (page <= maxPages) {
             try {
                 const pageUrl = url.includes('?') ? `${url}&page=${page}` : `${url}?page=${page}`;
-                const response = await fetch(pageUrl, { headers: getApiHeaders() });
+                const headers = getApiHeaders();
+                
+                // Debug: Log request details (remove token from log)
+                console.log(`Fetching: ${pageUrl}`);
+                console.log('Headers:', { ...headers, Authorization: 'token ***' });
+                
+                const response = await fetch(pageUrl, { 
+                    method: 'GET',
+                    headers: headers,
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
                 
                 // Check rate limit
                 const remaining = response.headers.get('X-RateLimit-Remaining');
@@ -2068,7 +2108,13 @@
                 
                 if (response.status === 401) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(`GitHub API authentication failed (401). Token may be invalid or expired. ${errorData.message || 'Please check your token.'}`);
+                    console.error('401 Error Details:', errorData);
+                    console.error('Response Headers:', {
+                        'X-RateLimit-Remaining': remaining,
+                        'X-RateLimit-Reset': resetTime,
+                        'X-GitHub-Media-Type': response.headers.get('X-GitHub-Media-Type')
+                    });
+                    throw new Error(`GitHub API authentication failed (401). ${errorData.message || 'Bad credentials. Token may be invalid, expired, or missing required scopes.'}`);
                 }
                 
             if (response.status === 403) {
@@ -2290,6 +2336,13 @@
         }
 
         try {
+            // Validate token first
+            console.log("🔍 Validating GitHub token...");
+            const tokenValidation = await validateToken();
+            if (!tokenValidation.valid) {
+                throw new Error(`Token validation failed: ${tokenValidation.error}. Please check your GitHub token has the 'public_repo' scope.`);
+            }
+            
             console.log("🔄 Fetching fresh data with token...");
             
             // Fetch merged pull requests

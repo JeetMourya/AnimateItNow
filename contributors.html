@@ -829,7 +829,18 @@
         while (true) {
           try {
             const url = `https://api.github.com/repos/${owner}/${repo}/contributors?per_page=${perPage}&page=${page}`;
-            const response = await fetch(url, { headers: getApiHeaders() });
+            const headers = getApiHeaders();
+            
+            // Debug: Log request details (remove token from log)
+            console.log(`Fetching contributors page ${page}`);
+            console.log('Headers:', { ...headers, Authorization: 'token ***' });
+            
+            const response = await fetch(url, { 
+              method: 'GET',
+              headers: headers,
+              mode: 'cors',
+              cache: 'no-cache'
+            });
 
             // Check rate limit
             const remaining = response.headers.get('X-RateLimit-Remaining');
@@ -837,7 +848,13 @@
             
             if (response.status === 401) {
               const errorData = await response.json().catch(() => ({}));
-              throw new Error(`GitHub API authentication failed (401). Token may be invalid or expired. ${errorData.message || 'Please check your token.'}`);
+              console.error('401 Error Details:', errorData);
+              console.error('Response Headers:', {
+                'X-RateLimit-Remaining': remaining,
+                'X-RateLimit-Reset': resetTime,
+                'X-GitHub-Media-Type': response.headers.get('X-GitHub-Media-Type')
+              });
+              throw new Error(`GitHub API authentication failed (401). ${errorData.message || 'Bad credentials. Token may be invalid, expired, or missing required scopes.'}`);
             }
             
             if (response.status === 403) {
